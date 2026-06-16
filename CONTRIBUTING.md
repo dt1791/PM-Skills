@@ -17,6 +17,7 @@ PM Skills Marketplace is maintained by [Paweł Huryn](https://www.productcompass
 - Every contributor will be listed publicly.
 - Run the validator before submitting: `python3 validate_plugins.py`
 - Regenerate Cursor sub-agents after skill changes: `python3 generate_agents.py`
+- Regenerate pm-product-discovery sub-agents (full embedded workflows): `python3 generate_discovery_agents.py`
 
 ## License
 
