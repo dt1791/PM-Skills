@@ -26,6 +26,22 @@ Product discovery skills for PMs: ideation, experiments, assumption testing, fea
 - `/pm-product-discovery:setup-metrics` — Design a product metrics dashboard with North Star metric, input metrics, health metrics, and alert thresholds.
 - `/pm-product-discovery:triage-requests` — Analyze, categorize, and prioritize a batch of feature requests from customers or stakeholders.
 
+## Cursor Sub-Agents
+
+Each skill has a matching sub-agent in `agents/` (and `.cursor/agents/` at repo root). Invoke in Cursor with `/skill-name`.
+
+**Discovery sequence (run in order):**
+
+1. `/validate-problem` — Stage 0, run first
+2. `/brainstorm-ideas-new` or `/brainstorm-ideas-existing` — Stage 1
+3. `/identify-assumptions-new` or `/identify-assumptions-existing` — Stage 2
+4. `/prioritize-assumptions` — Stage 3
+5. `/brainstorm-experiments-new` or `/brainstorm-experiments-existing` — Stage 4
+
+Or run the full cycle: `/discover`
+
+Regenerate agents after skill changes: `python3 generate_discovery_agents.py`
+
 ## Author
 
 Paweł Huryn — [The Product Compass Newsletter](https://www.productcompass.pm)

@@ -83,7 +83,7 @@ The `skills/*/SKILL.md` files follow the universal skill format and work with an
 |------|-----------|------------|
 | **Gemini CLI** | Copy skill folders to `.gemini/skills/` | Skills only |
 | **OpenCode** | Copy skill folders to `.opencode/skills/` | Skills only |
-| **Cursor** | Copy skill folders to `.cursor/skills/` | Skills only |
+| **Cursor** | Copy skill folders to `.cursor/skills/` and agent files to `.cursor/agents/` | Skills + sub-agents |
 | **Codex CLI** | Copy skill folders to `.codex/skills/` | Skills only |
 | **Kiro** | Copy skill folders to `.kiro/skills/` | Skills only |
 
@@ -92,6 +92,13 @@ The `skills/*/SKILL.md` files follow the universal skill format and work with an
 for plugin in pm-*/; do
   mkdir -p .opencode/skills/
   cp -r "$plugin/skills/"* .opencode/skills/ 2>/dev/null
+done
+
+# Example: copy all skills and sub-agents for Cursor (project-level)
+for plugin in pm-*/; do
+  mkdir -p .cursor/skills/ .cursor/agents/
+  cp -r "$plugin/skills/"* .cursor/skills/ 2>/dev/null
+  cp -r "$plugin/agents/"* .cursor/agents/ 2>/dev/null
 done
 
 # Example: copy all skills for Gemini CLI (global)

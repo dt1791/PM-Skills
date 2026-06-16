@@ -10,12 +10,14 @@ PM Skills Marketplace is maintained by [Paweł Huryn](https://www.productcompass
 ## Guidelines
 
 - Keep PRs focused — one change per PR.
-- Follow existing patterns: skills are nouns (domain knowledge), commands are verbs (workflows).
-- Every skill needs frontmatter with `name` and `description`. Every command needs `description` and `argument-hint`.
-- Skill `name` must match its directory name.
+- Follow existing patterns: skills are nouns (domain knowledge), commands are verbs (workflows), agents mirror skills for Cursor sub-agent delegation.
+- Every skill needs frontmatter with `name` and `description`. Every command needs `description` and `argument-hint`. Every agent needs `name` and `description` matching its skill.
+- Skill `name` must match its directory name. Agent `name` must match its filename (without `.md`).
 - No cross-plugin references in commands. Suggest follow-ups in natural language only.
 - Every contributor will be listed publicly.
 - Run the validator before submitting: `python3 validate_plugins.py`
+- Regenerate Cursor sub-agents after skill changes: `python3 generate_agents.py`
+- Regenerate pm-product-discovery sub-agents (full embedded workflows): `python3 generate_discovery_agents.py`
 
 ## License
 
