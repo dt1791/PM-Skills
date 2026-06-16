@@ -5,6 +5,7 @@ Plugin Collection Validator
 Validates all plugins in the collection against the Claude Code plugin spec:
 - plugin.json manifest: required fields, author attribution, keywords
 - Skills: YAML frontmatter (name must match directory, description required)
+- Agents: YAML frontmatter (name must match filename, description required)
 - Commands: YAML frontmatter (description and argument-hint required)
 - Cross-references: commands referencing skills that exist in the same plugin
 - README: exists and has expected sections
@@ -39,6 +40,9 @@ REQUIRED_SKILL_FIELDS = ["name", "description"]
 # Required command frontmatter fields
 REQUIRED_COMMAND_FIELDS = ["description"]
 RECOMMENDED_COMMAND_FIELDS = ["argument-hint"]
+
+# Required agent frontmatter fields
+REQUIRED_AGENT_FIELDS = ["name", "description"]
 
 # Expected README sections (case-insensitive substring match)
 EXPECTED_README_SECTIONS = ["overview", "install", "skill", "command"]
@@ -229,6 +233,65 @@ def validate_skill(skill_dir: str) -> ValidationResult:
     return result
 
 
+def validate_agent(agent_path: str) -> ValidationResult:
+    """Validate a single agent file."""
+    result = ValidationResult()
+    agent_name = os.path.splitext(os.path.basename(agent_path))[0]
+
+    with open(agent_path, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    fm = parse_yaml_frontmatter(content)
+    if fm is None:
+        result.error("Missing YAML frontmatter (must start with ---)")
+        return result
+
+    for field in REQUIRED_AGENT_FIELDS:
+        if field not in fm or not fm[field]:
+            result.error(f"Missing required frontmatter field: {field}")
+
+    if fm.get("name") and fm["name"] != agent_name:
+        result.error(f"Name mismatch: frontmatter says '{fm['name']}' but file is '{agent_name}.md'")
+
+    desc = fm.get("description", "")
+    if desc and len(desc) < 30:
+        result.warn(f"Description is very short ({len(desc)} chars)")
+
+    body = content.split("---", 2)[2].strip() if content.startswith("---") else content.strip()
+    if len(body) < 50:
+        result.warn("Agent body is very short")
+
+    return result
+
+
+def validate_agent_skill_parity(plugin_dir: str, skill_names: list[str]) -> ValidationResult:
+    """Ensure every skill has a matching agent and vice versa."""
+    result = ValidationResult()
+    agents_dir = os.path.join(plugin_dir, "agents")
+    agent_names: list[str] = []
+
+    if not os.path.isdir(agents_dir):
+        if skill_names:
+            result.error("Missing agents/ directory")
+        return result
+
+    for agent_file in sorted(os.listdir(agents_dir)):
+        if not agent_file.endswith(".md"):
+            continue
+        agent_names.append(os.path.splitext(agent_file)[0])
+
+    for skill_name in skill_names:
+        if skill_name not in agent_names:
+            result.error(f"Missing agent for skill '{skill_name}'")
+
+    for agent_name in agent_names:
+        if agent_name not in skill_names:
+            result.warn(f"Agent '{agent_name}' has no matching skill")
+
+    result.note(f"Agents: {len(agent_names)}")
+    return result
+
+
 def validate_command(cmd_path: str) -> ValidationResult:
     """Validate a single command file."""
     result = ValidationResult()
@@ -344,10 +407,22 @@ def validate_plugin(plugin_dir: str) -> dict:
     results["sections"]["commands"] = cmd_results
     results["command_count"] = len(cmd_results)
 
-    # 4. README
+    # 4. Agents
+    agents_dir = os.path.join(plugin_dir, "agents")
+    agent_results = {}
+    if os.path.isdir(agents_dir):
+        for agent_file in sorted(os.listdir(agents_dir)):
+            if agent_file.endswith(".md"):
+                agent_path = os.path.join(agents_dir, agent_file)
+                agent_results[agent_file] = validate_agent(agent_path)
+    results["sections"]["agents"] = agent_results
+    results["agent_count"] = len(agent_results)
+    results["sections"]["agent-parity"] = validate_agent_skill_parity(plugin_dir, skill_names)
+
+    # 5. README
     results["sections"]["readme"] = validate_readme(plugin_dir)
 
-    # 5. Cross-references
+    # 6. Cross-references
     results["sections"]["cross-refs"] = validate_cross_references(plugin_dir, skill_names)
 
     return results
@@ -373,6 +448,7 @@ def print_report(all_results: list[dict]):
     total_warnings = 0
     total_skills = 0
     total_commands = 0
+    total_agents = 0
 
     print(f"\n{C.BOLD}{'='*70}")
     print(f" Plugin Collection Validator — Report")
@@ -382,8 +458,10 @@ def print_report(all_results: list[dict]):
         name = plugin["name"]
         sc = plugin["skill_count"]
         cc = plugin["command_count"]
+        ac = plugin.get("agent_count", 0)
         total_skills += sc
         total_commands += cc
+        total_agents += ac
 
         # Count errors/warnings for this plugin
         p_errors = 0
@@ -403,7 +481,7 @@ def print_report(all_results: list[dict]):
         # Plugin header
         status = f"{C.GREEN}✓ PASS{C.RESET}" if p_errors == 0 else f"{C.RED}✗ FAIL{C.RESET}"
         warn_str = f" {C.YELLOW}({p_warnings} warnings){C.RESET}" if p_warnings > 0 else ""
-        print(f"{C.BOLD}{C.CYAN}┌─ {name}{C.RESET}  [{sc} skills, {cc} commands]  {status}{warn_str}")
+        print(f"{C.BOLD}{C.CYAN}┌─ {name}{C.RESET}  [{sc} skills, {ac} agents, {cc} commands]  {status}{warn_str}")
 
         # Manifest
         manifest = plugin["sections"]["manifest"]
@@ -429,6 +507,20 @@ def print_report(all_results: list[dict]):
                 print(f"    {cname}:")
                 print_validation_result(cname, vr, indent=6)
 
+        # Agents with issues
+        agent_results = plugin["sections"].get("agents", {})
+        agents_with_issues = {k: v for k, v in agent_results.items() if v.errors or v.warnings}
+        if agents_with_issues:
+            print(f"  {C.BOLD}Agents with issues:{C.RESET}")
+            for aname, vr in agents_with_issues.items():
+                print(f"    {aname}:")
+                print_validation_result(aname, vr, indent=6)
+
+        agent_parity = plugin["sections"].get("agent-parity")
+        if agent_parity and (agent_parity.errors or agent_parity.warnings):
+            print(f"  {C.BOLD}Agent parity:{C.RESET}")
+            print_validation_result("agent-parity", agent_parity)
+
         # README
         readme = plugin["sections"]["readme"]
         if readme.errors or readme.warnings:
@@ -449,8 +541,9 @@ def print_report(all_results: list[dict]):
     print(f"{'='*70}{C.RESET}")
     print(f"  Plugins:   {len(all_results)}")
     print(f"  Skills:    {total_skills}")
+    print(f"  Agents:    {total_agents}")
     print(f"  Commands:  {total_commands}")
-    print(f"  Total:     {total_skills + total_commands} components")
+    print(f"  Total:     {total_skills + total_agents + total_commands} components")
     print()
     if total_errors == 0:
         print(f"  {C.GREEN}{C.BOLD}✓ ALL CHECKS PASSED{C.RESET} ({total_warnings} warnings)")
